@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}ServeBox - /{{ current_path }}{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-title">Folders</div>
+    <div class="tree">
+      <div class="tree-node">
+        <button class="tree-toggle" data-tree-toggle data-path="" aria-label="Expand root">+</button>
+        <a class="tree-link" href="/browse">Root</a>
+      </div>
+      <div id="treeChildren" class="tree-children"></div>
+    </div>
+  </aside>
+
+  <main class="main-panel">
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+      {% for crumb in breadcrumbs %}
+        {% if not loop.last %}
+          <a href="/browse?path={{ crumb.path|urlencode }}">{{ crumb.name }}</a>
+          <span>/</span>
+        {% else %}
+          <span>{{ crumb.name }}</span>
+        {% endif %}
+      {% endfor %}
+    </nav>
+
+    <section class="panel-header">
+      <div>
+        <h1>/{{ current_path }}</h1>
+        <p>{{ items|length }} item{% if items|length != 1 %}s{% endif %}</p>
+      </div>
+      <div class="panel-actions">
+        <input id="dirFilter" type="search" placeholder="Filter current directory" autocomplete="off">
+        {% if not readonly %}
+        <button id="uploadButton" class="button primary" type="button">Upload</button>
+        <button id="mkdirButton" class="button" type="button">New folder</button>
+        <input id="fileInput" type="file" multiple hidden>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if not readonly %}
+    <section id="dropZone" class="drop-zone">
+      Drop files here or use Upload. Existing names are preserved with numbered copies.
+    </section>
+    {% endif %}
+
+    <div id="statusLine" class="status-line" role="status"></div>
+
+    <section class="table-wrap">
+      <table class="file-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Size</th>
+            <th>Modified</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="fileTableBody">
+          {% for item in items %}
+          <tr data-name="{{ item.name|lower }}" data-path="{{ item.relative_path }}" data-type="{{ item.type }}">
+            <td>
+              <div class="name-cell">
+                {% if item.type == "folder" and item.accessible %}
+                  <a class="item-name folder" href="/browse?path={{ item.relative_path|urlencode }}">{{ item.name }}</a>
+                {% elif item.type == "file" and item.accessible %}
+                  <a class="item-name file" href="/view?path={{ item.relative_path|urlencode }}">{{ item.name }}</a>
+                {% else %}
+                  <span class="item-name blocked">{{ item.name }}</span>
+                {% endif %}
+                <span class="path-chip">{{ item.relative_path }}</span>
+                {% if item.is_symlink %}
+                  <span class="tag">symlink</span>
+                {% endif %}
+                {% if item.target_outside %}
+                  <span class="tag danger">outside root</span>
+                {% endif %}
+              </div>
+            </td>
+            <td>{{ item.type }}</td>
+            <td>{{ item.size_display }}</td>
+            <td>{{ item.modified_display }}</td>
+            <td>
+              <div class="row-actions">
+                {% if item.type == "folder" and item.accessible %}
+                  <a class="button compact" href="/browse?path={{ item.relative_path|urlencode }}">Open</a>
+                {% elif item.type == "file" and item.accessible %}
+                  <a class="button compact" href="/view?path={{ item.relative_path|urlencode }}">View</a>
+                  <a class="button compact" href="/download?path={{ item.relative_path|urlencode }}">Download</a>
+                {% endif %}
+                <button class="button compact" type="button" data-copy="{{ item.relative_path }}">Copy path</button>
+                {% if not readonly and item.accessible %}
+                  <button class="button compact" type="button" data-action="rename" data-path="{{ item.relative_path }}" data-name="{{ item.name }}">Rename</button>
+                  <button class="button compact danger" type="button" data-action="delete" data-path="{{ item.relative_path }}" data-name="{{ item.name }}">Delete</button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="empty-state">This directory is empty.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+</div>
+{% endblock %}

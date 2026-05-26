@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}ServeBox - {{ item.name }}{% endblock %}
+
+{% block content %}
+<main class="viewer">
+  <nav class="breadcrumbs" aria-label="Breadcrumb">
+    {% for crumb in breadcrumbs %}
+      {% if not loop.last %}
+        <a href="/browse?path={{ crumb.path|urlencode }}">{{ crumb.name }}</a>
+        <span>/</span>
+      {% else %}
+        <span>{{ crumb.name }}</span>
+      {% endif %}
+    {% endfor %}
+  </nav>
+
+  <section class="viewer-header">
+    <div>
+      <h1>{{ item.name }}</h1>
+      <p class="path-line">{{ item.relative_path }}</p>
+    </div>
+    <div class="panel-actions">
+      <a class="button" href="/browse?path={{ item.parent_path|urlencode }}">Containing folder</a>
+      <a class="button primary" href="/download?path={{ item.relative_path|urlencode }}">Download</a>
+      <button class="button" type="button" data-copy="{{ item.relative_path }}">Copy path</button>
+    </div>
+  </section>
+
+  <section class="metadata-grid">
+    <div><span>Type</span><strong>{{ item.type }}</strong></div>
+    <div><span>Size</span><strong>{{ item.size_display }}</strong></div>
+    <div><span>Modified</span><strong>{{ item.modified_display }}</strong></div>
+    <div><span>MIME</span><strong>{{ item.mime_type or "unknown" }}</strong></div>
+  </section>
+
+  <section class="preview-panel">
+    {% if item.preview_type == "text" %}
+      {% if preview_truncated %}
+        <div class="notice">Preview limited to the first {{ config.max_preview_mb }} MB.</div>
+      {% endif %}
+      <pre class="text-preview"><code>{{ text_preview }}</code></pre>
+    {% elif item.preview_type == "image" %}
+      <img class="image-preview" src="/raw?path={{ item.relative_path|urlencode }}" alt="{{ item.name }}">
+    {% elif item.preview_type == "pdf" %}
+      <iframe class="pdf-preview" src="/raw?path={{ item.relative_path|urlencode }}" title="{{ item.name }}"></iframe>
+    {% elif item.preview_type == "audio" %}
+      <audio controls src="/raw?path={{ item.relative_path|urlencode }}"></audio>
+    {% elif item.preview_type == "video" %}
+      <video controls src="/raw?path={{ item.relative_path|urlencode }}"></video>
+    {% else %}
+      <div class="empty-state">
+        Preview is not available for this file type. Use Download to save it locally.
+      </div>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

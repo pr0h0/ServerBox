@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ServeBox Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  </head>
+  <body>
+    <main class="login-page">
+      <form class="login-panel" method="post" action="/login">
+        <h1>ServeBox</h1>
+        <p>Enter the access token to continue.</p>
+        {% if error %}
+          <div class="notice danger">{{ error }}</div>
+        {% endif %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <label for="token">Token</label>
+        <input id="token" name="token" type="password" autofocus required>
+        <button class="button primary" type="submit">Login</button>
+      </form>
+    </main>
+  </body>
+</html>

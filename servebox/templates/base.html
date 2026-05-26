@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}ServeBox{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/browse">ServeBox</a>
+      <div class="root-display" title="{{ root_display }}">{{ root_display }}</div>
+      <span class="mode-pill {% if readonly %}readonly{% else %}write{% endif %}">
+        {% if readonly %}Readonly{% else %}Write enabled{% endif %}
+      </span>
+      <div class="global-search">
+        <select id="searchScope" aria-label="Search scope">
+          <option value="root">Root</option>
+          <option value="current">Current</option>
+        </select>
+        <input id="globalSearch" type="search" placeholder="Search files" autocomplete="off">
+        <div id="searchResults" class="search-results" hidden></div>
+      </div>
+      {% if token_enabled %}
+      <form method="post" action="/logout" class="logout-form">
+        <button type="submit" class="button subtle">Logout</button>
+      </form>
+      {% endif %}
+    </header>
+
+    {% block content %}{% endblock %}
+
+    <div id="modalRoot" class="modal-root" hidden>
+      <div class="modal-overlay" data-modal-cancel></div>
+      <form id="modalForm" class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <h2 id="modalTitle"></h2>
+        <p id="modalMessage" class="modal-message"></p>
+        <label id="modalInputWrap" class="modal-input-wrap" hidden>
+          <span id="modalInputLabel"></span>
+          <input id="modalInput" type="text" autocomplete="off">
+        </label>
+        <div class="modal-actions">
+          <button id="modalCancel" class="button" type="button" data-modal-cancel>Cancel</button>
+          <button id="modalConfirm" class="button primary" type="submit">Confirm</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+    <script>
+      window.SERVEBOX = {
+        currentPath: {{ current_path|tojson }},
+        readonly: {{ readonly|tojson }},
+        maxUploadBytes: {{ config.max_upload_bytes|tojson }},
+        maxSearchResults: {{ config.max_search_results|tojson }}
+      };
+    </script>
+    <script src="{{ url_for('static', path='/app.js') }}" defer></script>
+  </body>
+</html>
