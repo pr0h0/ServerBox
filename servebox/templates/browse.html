@@ -85,16 +85,21 @@
       </div>
       <label class="search">
         <svg><use href="#i-search"/></svg>
-        <input id="search" type="search" placeholder="Search" value="{{ q }}" autocomplete="off" aria-label="Search">
+        <input id="search" type="search" placeholder="Filter · Enter searches all" value="{{ q }}" autocomplete="off" aria-label="Search">
       </label>
     </header>
 
     <div id="view" class="view" data-mode="{{ mode }}" data-title="{{ title }}">
       {% if mode == "search" %}
       <div class="scopebar">
-        <span>Search:</span>
-        <button type="button" class="chip{% if scope == 'root' %} on{% endif %}" data-scope="root">{{ root_name }}</button>
-        {% if current_path %}<button type="button" class="chip{% if scope == 'current' %} on{% endif %}" data-scope="current">“{{ folder_name }}”</button>{% endif %}
+        <span>In {{ "“" ~ root_name ~ "”" if scope == "root" else "“" ~ folder_name ~ "”" }} and its subfolders</span>
+        {% if search_timed_out %}<span class="warn">Stopped after {{ search_time_limit }}s, showing partial results.</span>
+        {% elif items|length >= config.max_search_results %}<span class="warn">Showing the first {{ items|length }} results.</span>{% endif %}
+      </div>
+      {% else %}
+      <div class="scopebar" id="filterBar" hidden>
+        <span id="filterInfo"></span>
+        <button type="button" class="chip on" data-search-all>Search all subfolders</button>
       </div>
       {% endif %}
 

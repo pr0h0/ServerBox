@@ -115,7 +115,7 @@
 
   /* ---------------- items + selection ---------------- */
 
-  const items = () => $all("#files .item");
+  const items = () => $all("#files .item:not([hidden])");
   const selected = () => $all("#files .item.selected");
   let anchor = null;
   let cursor = null;
@@ -193,10 +193,8 @@
     const finalUrl = response.url || url;
     if (how === "push") history.pushState(null, "", finalUrl);
     if (how === "replace") history.replaceState(null, "", finalUrl);
-    if (how !== "keep-search") {
-      const search = $("#search");
-      if (search) search.value = doc.getElementById("search")?.value || "";
-    }
+    const search = $("#search");
+    if (search) search.value = doc.getElementById("search")?.value || "";
     const activeHrefs = $all(".sidebar .side-link.active", doc).map((link) => link.getAttribute("href"));
     $all(".sidebar .side-link").forEach((link) => link.classList.toggle("active", activeHrefs.includes(link.getAttribute("href"))));
     markTree();
@@ -571,14 +569,42 @@
 
   /* ---------------- search ---------------- */
 
+  // Typing filters the current view in the browser; the recursive server search only runs on Enter / button.
   let searchTimer = 0;
 
-  function runSearch(scope) {
+  function filterLocal() {
+    const query = $("#search").value.trim().toLowerCase();
+    let shown = 0;
+    $all("#files .item").forEach((item) => {
+      const hit = !query || item.dataset.name.toLowerCase().includes(query);
+      item.hidden = !hit;
+      if (hit) shown += 1;
+      else item.classList.remove("selected");
+    });
+    const bar = $("#filterBar");
+    if (bar) {
+      bar.hidden = !query;
+      $("#filterInfo").textContent = `${shown} match${shown === 1 ? "" : "es"} here`;
+    }
+    updateCount();
+  }
+
+  function onSearchInput() {
     const query = $("#search").value.trim();
-    const url = query
-      ? `/browse?path=${enc(currentPath())}&q=${enc(query)}&scope=${scope || $(".chip.on")?.dataset.scope || "root"}`
-      : folderUrl(currentPath());
-    loadView(url, "keep-search").then(() => history.replaceState(null, "", url));
+    if ($("#view")?.dataset.mode === "search") {
+      // Editing a subfolder search doesn't re-run it; clearing the box goes back to the folder.
+      if (!query) loadView(folderUrl(currentPath()), "replace");
+      return;
+    }
+    filterLocal();
+  }
+
+  function searchEverywhere() {
+    const query = $("#search").value.trim();
+    if (!query) return;
+    const info = $("#filterInfo");
+    if (info) info.textContent = "Searching subfolders…";
+    loadView(`/browse?path=${enc(currentPath())}&q=${enc(query)}&scope=current`, "push");
   }
 
   /* ---------------- drag and drop ---------------- */
@@ -722,8 +748,7 @@
         return applySort();
       }
 
-      const scope = event.target.closest("[data-scope]");
-      if (scope) return runSearch(scope.dataset.scope);
+      if (event.target.closest("[data-search-all]")) return searchEverywhere();
 
       const cmd = event.target.closest("[data-cmd]");
       if (cmd && cmd.dataset.cmd === "mkdir") return newFolder();
@@ -762,7 +787,13 @@
     if (search) {
       search.addEventListener("input", () => {
         clearTimeout(searchTimer);
-        searchTimer = setTimeout(() => runSearch(), 300);
+        searchTimer = setTimeout(onSearchInput, 150);
+      });
+      search.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        clearTimeout(searchTimer);
+        searchEverywhere();
       });
     }
     const fileInput = $("#fileInput");
@@ -795,7 +826,7 @@
     if (event.target.matches("input, textarea, select")) {
       if (event.key === "Escape" && event.target.id === "search" && event.target.value) {
         event.target.value = "";
-        runSearch();
+        onSearchInput();
       }
       return;
     }

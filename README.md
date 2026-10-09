@@ -1,4 +1,6 @@
-# ServeBox
+<p align="center"><img src="servebox/static/favicon.svg" alt="ServeBox logo" width="120"></p>
+
+<h1 align="center">ServeBox</h1>
 
 ServeBox is a local/private file browser and file server for a selected root directory. Think `python -m http.server 9999`, but with a macOS Finder-style web UI: icon and list views, right-click menus, color tags, Quick Look, drag-and-drop moves and uploads, search, and a layout that works on phones.
 
@@ -75,7 +77,7 @@ python -m servebox ~/Downloads --show-hidden
 
 - Finder-style window: sidebar (root, lazy folder tree, tags), toolbar, path bar, and item count.
 - Icon view with image thumbnails, or list view with sortable Name, Date Modified, Size, and Kind columns.
-- Recursive case-insensitive search that shows results in the main view, scoped to the root or the current folder.
+- Typing in the search box instantly filters the current folder. Press Enter (or **Search all subfolders**) to search the open folder and everything below it; that search runs off the main thread and stops after 10 seconds with partial results.
 - Quick Look (Space) for text, images, PDF, audio, and video, plus a full preview page with file info.
 - Dark mode follows the system; on phones the sidebar slides in and actions live behind a `⋯` button.
 

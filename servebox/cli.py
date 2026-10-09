@@ -70,4 +70,5 @@ def main(argv: list[str] | None = None) -> None:
         parser.error(str(exc))
 
     app = create_app(config)
-    uvicorn.run(app, host=config.host, port=config.port)
+    # Short graceful timeout: ^C cancels in-flight requests (e.g. a long search) instead of waiting on them.
+    uvicorn.run(app, host=config.host, port=config.port, timeout_graceful_shutdown=1)

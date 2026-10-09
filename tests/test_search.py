@@ -24,3 +24,10 @@ def test_search_skips_excluded_directories(tmp_path: Path) -> None:
     results = search_files(config, "needle", tmp_path)
 
     assert [result.relative_path for result in results] == ["keep/needle.txt"]
+
+
+def test_search_stops_when_asked(tmp_path: Path) -> None:
+    (tmp_path / "match.txt").write_text("x")
+    config = AppConfig(root=tmp_path)
+
+    assert search_files(config, "match", tmp_path, should_stop=lambda: True) == []

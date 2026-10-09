@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 from .config import AppConfig
@@ -8,7 +9,10 @@ from .fs import FileItem, build_file_item
 from .security import is_inside_root
 
 
-def search_files(config: AppConfig, query: str, start_dir: Path) -> list[FileItem]:
+def search_files(
+    config: AppConfig, query: str, start_dir: Path, should_stop: Callable[[], bool] | None = None
+) -> list[FileItem]:
+    """Recursive name search. Stops early at max results or once `should_stop()` returns True."""
     needle = query.casefold().strip()
     if not needle:
         return []
@@ -19,7 +23,7 @@ def search_files(config: AppConfig, query: str, start_dir: Path) -> list[FileIte
         return results
 
     def walk(directory: Path) -> None:
-        if len(results) >= config.max_search_results:
+        if len(results) >= config.max_search_results or (should_stop and should_stop()):
             return
         try:
             with os.scandir(directory) as entries:
@@ -28,7 +32,7 @@ def search_files(config: AppConfig, query: str, start_dir: Path) -> list[FileIte
             return
 
         for entry in sorted_entries:
-            if len(results) >= config.max_search_results:
+            if len(results) >= config.max_search_results or (should_stop and should_stop()):
                 return
             if not config.show_hidden and entry.name.startswith("."):
                 continue

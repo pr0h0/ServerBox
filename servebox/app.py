@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
+import time
 import urllib.parse
 from pathlib import Path
 from typing import Any
@@ -43,6 +45,8 @@ from .tags import TAG_COLORS, TagStore
 
 PACKAGE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
+
+SEARCH_TIME_LIMIT = 10  # seconds; a recursive walk of a huge tree returns partial results instead of running forever
 
 PAGE_CSP = (
     "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; frame-src 'self'; "
@@ -160,6 +164,7 @@ def create_app(config: AppConfig) -> FastAPI:
         if not directory.is_dir():
             return RedirectResponse(f"/view?path={urllib.parse.quote(path)}", status_code=303)
         current_path = relative_path(config, directory)
+        timed_out = False
         if tag:
             if tag not in TAG_COLORS:
                 raise HTTPException(status_code=404, detail="Unknown tag")
@@ -168,7 +173,8 @@ def create_app(config: AppConfig) -> FastAPI:
             if scope not in {"root", "current"}:
                 raise HTTPException(status_code=400, detail="scope must be root or current")
             start = config.root if scope == "root" else directory
-            mode, items = "search", search_files(config, q, start)
+            items, timed_out = await run_search(q, start)
+            mode = "search"
         else:
             mode, items = "folder", list_directory(config, directory)
         return render_template(
@@ -181,6 +187,8 @@ def create_app(config: AppConfig) -> FastAPI:
             tag=tag,
             q=q,
             scope=scope,
+            search_timed_out=timed_out,
+            search_time_limit=SEARCH_TIME_LIMIT,
         )
 
     @app.get("/view", response_class=HTMLResponse)
@@ -242,8 +250,15 @@ def create_app(config: AppConfig) -> FastAPI:
         if scope not in {"root", "current"}:
             raise HTTPException(status_code=400, detail="scope must be root or current")
         start = config.root if scope == "root" else safe_resolve(config, path)
-        results = [item.to_dict() for item in with_tags(search_files(config, q, start))]
-        return {"query": q, "scope": scope, "results": results, "limit": config.max_search_results}
+        items, timed_out = await run_search(q, start)
+        results = [item.to_dict() for item in with_tags(items)]
+        return {
+            "query": q,
+            "scope": scope,
+            "results": results,
+            "limit": config.max_search_results,
+            "timed_out": timed_out,
+        }
 
     @app.post("/api/upload")
     async def api_upload(path: str = "", files: list[UploadFile] = File(...)) -> dict[str, Any]:
@@ -334,6 +349,18 @@ def create_app(config: AppConfig) -> FastAPI:
         delete_path(config, target)
         tag_store.move(relative_path(config, target), None)
         return {"deleted": path}
+
+    async def run_search(q: str, start: Path) -> tuple[list[FileItem], bool]:
+        # The walk is blocking disk IO: run it in a thread so it can't freeze the event loop (and ^C).
+        deadline = time.monotonic() + SEARCH_TIME_LIMIT
+        cancelled = threading.Event()
+        try:
+            items = await asyncio.to_thread(
+                search_files, config, q, start, lambda: cancelled.is_set() or time.monotonic() > deadline
+            )
+        finally:
+            cancelled.set()  # request cancelled (shutdown): stop the thread instead of letting it run on
+        return items, time.monotonic() > deadline
 
     def with_tags(items: list[FileItem]) -> list[FileItem]:
         for item in items:

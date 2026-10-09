@@ -163,13 +163,15 @@ Items can carry Finder's seven color tags (red, orange, yellow, green, blue, pur
 
 ## Search
 
-The search box in the top bar performs case-insensitive recursive filename search. It behaves like:
+Typing in the search box filters the current folder (or tag view) instantly in the browser. It does not touch the server.
+
+Press Enter, or click **Search all subfolders**, to run a case-insensitive recursive filename search of the open folder and everything below it. Folders outside the one you're in are not searched; go to the root to search everything. It behaves like:
 
 ```bash
 find . -iname "*query*"
 ```
 
-Results replace the file view as you type. Use the scope chips under the toolbar to search the whole root or only the current folder. It skips excluded directory names and stops at `--max-search-results`.
+The recursive search skips excluded directory names, stops at `--max-search-results`, and gives up after 10 seconds with partial results, so a huge tree can't hang the server. Clear the search box to return to the folder.
 
 ## Uploads
 
