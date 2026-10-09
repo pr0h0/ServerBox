@@ -1,114 +1,135 @@
 {% extends "base.html" %}
 
-{% block title %}ServeBox - /{{ current_path }}{% endblock %}
+{% set folder_name = breadcrumbs[-1].name if current_path else root_name %}
+{% if mode == "tag" %}{% set title = tag|capitalize %}
+{% elif mode == "search" %}{% set title = "Searching “" ~ q ~ "”" %}
+{% else %}{% set title = folder_name %}{% endif %}
+
+{% block title %}{{ title }} – ServeBox{% endblock %}
+
+{% macro row(item, show_where) -%}
+{%- set ext = item.name.rpartition('.')[2]|lower if '.' in item.name.lstrip('.') else '' -%}
+{%- set kinds = {"image": "image", "video": "video", "audio": "audio", "pdf": "document", "text": "text"} -%}
+{%- if item.type == "folder" -%}{%- set kind = "Folder" -%}{%- set href = "/browse?path=" ~ (item.relative_path|urlencode) -%}
+{%- elif item.type == "file" -%}{%- set kind = ((ext|upper ~ " ") if ext else "") ~ kinds.get(item.preview_type, "file") -%}{%- set href = "/view?path=" ~ (item.relative_path|urlencode) -%}
+{%- else -%}{%- set kind = "Link" if item.is_symlink else "Other" -%}{%- set href = "" -%}{%- endif -%}
+<div class="item" role="row" tabindex="-1"
+  data-path="{{ item.relative_path }}" data-name="{{ item.name }}" data-type="{{ item.type }}"
+  data-preview="{{ item.preview_type }}" data-size="{{ item.size if item.size is not none else -1 }}"
+  data-mtime="{{ item.modified or 0 }}" data-kind="{{ kind }}" data-tags="{{ item.tags|join(' ') }}"
+  data-href="{{ href if item.accessible else '' }}" draggable="{{ 'false' if readonly else 'true' }}">
+  <div class="c-name" role="gridcell">
+    {%- if item.type == "folder" %}<span class="icon folder" aria-hidden="true"></span>
+    {%- elif item.preview_type == "image" and item.accessible %}<span class="icon thumb" aria-hidden="true"><img src="/raw?path={{ item.relative_path|urlencode }}" loading="lazy" decoding="async" alt=""></span>
+    {%- else %}<span class="icon file {{ item.preview_type }}" data-ext="{{ ext[:4]|upper }}" aria-hidden="true"></span>{% endif %}
+    {%- if item.accessible and href %}<a class="name" href="{{ href }}" draggable="false">{{ item.name }}</a>
+    {%- else %}<span class="name blocked">{{ item.name }}</span>{% endif %}
+    <span class="tags">{% for t in item.tags %}<i class="dot tag-{{ t }}"></i>{% endfor %}</span>
+    {%- if item.target_outside %}<span class="badge danger">outside root</span>
+    {%- elif item.is_symlink %}<span class="badge" title="Symbolic link">alias</span>{% endif %}
+  </div>
+  {%- if show_where %}<div class="c-where" role="gridcell">/{{ item.parent_path }}</div>{% endif %}
+  <div class="c-date" role="gridcell" data-ts="{{ item.modified or '' }}">{{ item.modified_display }}</div>
+  <div class="c-size" role="gridcell">{{ item.size_display if item.type == "file" else "--" }}</div>
+  <div class="c-kind" role="gridcell">{{ kind }}</div>
+  <button class="more" type="button" data-more aria-label="Actions for {{ item.name }}"><svg><use href="#i-more"/></svg></button>
+</div>
+{%- endmacro %}
 
 {% block content %}
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="sidebar-title">Folders</div>
-    <div class="tree">
-      <div class="tree-node">
-        <button class="tree-toggle" data-tree-toggle data-path="" aria-label="Expand root">+</button>
-        <a class="tree-link" href="/browse">Root</a>
-      </div>
-      <div id="treeChildren" class="tree-children"></div>
-    </div>
-  </aside>
-
-  <main class="main-panel">
-    <nav class="breadcrumbs" aria-label="Breadcrumb">
-      {% for crumb in breadcrumbs %}
-        {% if not loop.last %}
-          <a href="/browse?path={{ crumb.path|urlencode }}">{{ crumb.name }}</a>
-          <span>/</span>
-        {% else %}
-          <span>{{ crumb.name }}</span>
-        {% endif %}
+<div class="window">
+  <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+    <div class="side-head">ServeBox</div>
+    <nav class="side-section" aria-label="Locations">
+      <h3>Locations</h3>
+      <a class="side-link{% if mode == 'folder' and not current_path %} active{% endif %}" href="/browse" data-drop-path="" title="{{ root_display }}">
+        <svg><use href="#i-home"/></svg><span>{{ root_name }}</span>
+      </a>
+    </nav>
+    <nav class="side-section" aria-label="Folders">
+      <h3>Folders</h3>
+      <div class="tree" data-tree-children=""></div>
+    </nav>
+    <nav class="side-section" aria-label="Tags">
+      <h3>Tags</h3>
+      {% for color in tag_colors %}
+      <a class="side-link{% if tag == color %} active{% endif %}" href="/browse?tag={{ color }}"><i class="dot tag-{{ color }}"></i><span>{{ color|capitalize }}</span></a>
       {% endfor %}
     </nav>
+    <div class="side-foot">
+      <span class="pill{% if readonly %} warn{% endif %}">{% if readonly %}Read only{% else %}Read &amp; write{% endif %}</span>
+      {% if token_enabled %}
+      <form method="post" action="/logout"><button type="submit" class="button compact">Log out</button></form>
+      {% endif %}
+    </div>
+  </aside>
+  <div class="scrim" data-sidebar-close></div>
 
-    <section class="panel-header">
-      <div>
-        <h1>/{{ current_path }}</h1>
-        <p>{{ items|length }} item{% if items|length != 1 %}s{% endif %}</p>
+  <div class="content">
+    <header class="toolbar">
+      <button class="tb-btn" type="button" data-sidebar-toggle aria-label="Toggle sidebar"><svg><use href="#i-sidebar"/></svg></button>
+      <div class="tb-nav">
+        <button class="tb-btn" type="button" data-nav="back" aria-label="Back"><svg><use href="#i-back"/></svg></button>
+        <button class="tb-btn" type="button" data-nav="forward" aria-label="Forward"><svg><use href="#i-fwd"/></svg></button>
       </div>
-      <div class="panel-actions">
-        <input id="dirFilter" type="search" placeholder="Filter current directory" autocomplete="off">
+      <h1 class="tb-title" id="viewTitle">{{ title }}</h1>
+      <div class="tb-group">
+        <div class="seg" role="group" aria-label="View">
+          <button class="tb-btn{% if view_mode == 'grid' %} on{% endif %}" type="button" data-view="grid" aria-label="Icons"><svg><use href="#i-grid"/></svg></button>
+          <button class="tb-btn{% if view_mode != 'grid' %} on{% endif %}" type="button" data-view="list" aria-label="List"><svg><use href="#i-list"/></svg></button>
+        </div>
         {% if not readonly %}
-        <button id="uploadButton" class="button primary" type="button">Upload</button>
-        <button id="mkdirButton" class="button" type="button">New folder</button>
-        <input id="fileInput" type="file" multiple hidden>
+        <button class="tb-btn" type="button" data-cmd="mkdir" aria-label="New folder" title="New folder"><svg><use href="#i-newfolder"/></svg></button>
+        <button class="tb-btn" type="button" data-cmd="upload" aria-label="Upload" title="Upload"><svg><use href="#i-upload"/></svg></button>
         {% endif %}
       </div>
-    </section>
+      <label class="search">
+        <svg><use href="#i-search"/></svg>
+        <input id="search" type="search" placeholder="Search" value="{{ q }}" autocomplete="off" aria-label="Search">
+      </label>
+    </header>
 
-    {% if not readonly %}
-    <section id="dropZone" class="drop-zone">
-      Drop files here or use Upload. Existing names are preserved with numbered copies.
-    </section>
-    {% endif %}
+    <div id="view" class="view" data-mode="{{ mode }}" data-title="{{ title }}">
+      {% if mode == "search" %}
+      <div class="scopebar">
+        <span>Search:</span>
+        <button type="button" class="chip{% if scope == 'root' %} on{% endif %}" data-scope="root">{{ root_name }}</button>
+        {% if current_path %}<button type="button" class="chip{% if scope == 'current' %} on{% endif %}" data-scope="current">“{{ folder_name }}”</button>{% endif %}
+      </div>
+      {% endif %}
 
-    <div id="statusLine" class="status-line" role="status"></div>
+      <div id="files" class="files {{ 'grid' if view_mode == 'grid' else 'list' }}{% if mode != 'folder' %} with-where{% endif %}" role="grid" aria-label="Files" aria-multiselectable="true">
+        <div class="files-head" role="row">
+          <button type="button" data-sort="name">Name</button>
+          {% if mode != "folder" %}<span>Where</span>{% endif %}
+          <button type="button" data-sort="mtime">Date Modified</button>
+          <button type="button" data-sort="size">Size</button>
+          <button type="button" data-sort="kind">Kind</button>
+          <span></span>
+        </div>
+        {% for item in items %}
+          {{ row(item, mode != "folder") }}
+        {% else %}
+          <div class="empty">
+            {% if mode == "search" %}No results{% elif mode == "tag" %}Nothing tagged {{ tag }} yet. Right-click an item to tag it.{% elif readonly %}This folder is empty{% else %}Drop files here to upload{% endif %}
+          </div>
+        {% endfor %}
+      </div>
 
-    <section class="table-wrap">
-      <table class="file-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Size</th>
-            <th>Modified</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="fileTableBody">
-          {% for item in items %}
-          <tr data-name="{{ item.name|lower }}" data-path="{{ item.relative_path }}" data-type="{{ item.type }}">
-            <td>
-              <div class="name-cell">
-                {% if item.type == "folder" and item.accessible %}
-                  <a class="item-name folder" href="/browse?path={{ item.relative_path|urlencode }}">{{ item.name }}</a>
-                {% elif item.type == "file" and item.accessible %}
-                  <a class="item-name file" href="/view?path={{ item.relative_path|urlencode }}">{{ item.name }}</a>
-                {% else %}
-                  <span class="item-name blocked">{{ item.name }}</span>
-                {% endif %}
-                <span class="path-chip">{{ item.relative_path }}</span>
-                {% if item.is_symlink %}
-                  <span class="tag">symlink</span>
-                {% endif %}
-                {% if item.target_outside %}
-                  <span class="tag danger">outside root</span>
-                {% endif %}
-              </div>
-            </td>
-            <td>{{ item.type }}</td>
-            <td>{{ item.size_display }}</td>
-            <td>{{ item.modified_display }}</td>
-            <td>
-              <div class="row-actions">
-                {% if item.type == "folder" and item.accessible %}
-                  <a class="button compact" href="/browse?path={{ item.relative_path|urlencode }}">Open</a>
-                {% elif item.type == "file" and item.accessible %}
-                  <a class="button compact" href="/view?path={{ item.relative_path|urlencode }}">View</a>
-                  <a class="button compact" href="/download?path={{ item.relative_path|urlencode }}">Download</a>
-                {% endif %}
-                <button class="button compact" type="button" data-copy="{{ item.relative_path }}">Copy path</button>
-                {% if not readonly and item.accessible %}
-                  <button class="button compact" type="button" data-action="rename" data-path="{{ item.relative_path }}" data-name="{{ item.name }}">Rename</button>
-                  <button class="button compact danger" type="button" data-action="delete" data-path="{{ item.relative_path }}" data-name="{{ item.name }}">Delete</button>
-                {% endif %}
-              </div>
-            </td>
-          </tr>
-          {% else %}
-          <tr>
-            <td colspan="5" class="empty-state">This directory is empty.</td>
-          </tr>
+      <footer class="statusbar">
+        <nav class="pathbar" aria-label="Path">
+          {% for crumb in breadcrumbs %}
+            <a href="/browse?path={{ crumb.path|urlencode }}" data-drop-path="{{ crumb.path }}">{{ root_name if loop.first else crumb.name }}</a>
+            {% if not loop.last %}<svg><use href="#i-chev"/></svg>{% endif %}
           {% endfor %}
-        </tbody>
-      </table>
-    </section>
-  </main>
+        </nav>
+        <span id="count">{{ items|length }} item{% if items|length != 1 %}s{% endif %}</span>
+      </footer>
+    </div>
+  </div>
+
+  <div id="dropOverlay" class="drop-overlay" hidden><div>Drop to upload to <strong id="dropTarget"></strong></div></div>
+  <div id="progress" class="progress" hidden><div class="bar"><span id="progressBar"></span></div><span id="progressText"></span></div>
+  <input id="fileInput" type="file" multiple hidden>
 </div>
 {% endblock %}

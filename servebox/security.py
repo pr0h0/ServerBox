@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import hmac
 import re
 from pathlib import Path, PurePosixPath
@@ -40,8 +41,18 @@ def _path_parts(user_path: str | None) -> list[str]:
     return parts
 
 
-def safe_resolve(config: AppConfig, user_path: str | None) -> Path:
+def safe_resolve(config: AppConfig, user_path: str | None, follow_final: bool = True) -> Path:
+    """Resolve a user path inside the root.
+
+    follow_final=False keeps a final symlink as-is (only its parent is resolved), so
+    rename/move/delete act on the link itself instead of whatever it points to.
+    """
     parts = _path_parts(user_path)
+    if not follow_final and parts:
+        parent = safe_resolve(config, "/".join(parts[:-1]))
+        if parts[-1] == "..":
+            raise HTTPException(status_code=403, detail="Path is outside the configured root")
+        return parent / parts[-1]
     try:
         target = config.root.joinpath(*parts).resolve(strict=False)
     except (OSError, RuntimeError, ValueError) as exc:
@@ -85,9 +96,21 @@ def token_matches(expected: str, provided: str | None) -> bool:
     return bool(provided) and hmac.compare_digest(expected, str(provided))
 
 
+def session_value(token: str) -> str:
+    """Cookie value derived from the token, so the raw token never sits in the browser's cookie jar."""
+    return hmac.new(token.encode("utf-8"), b"servebox-session", hashlib.sha256).hexdigest()
+
+
 def request_has_valid_token(request: Request, config: AppConfig) -> bool:
     if not config.token:
         return True
     query_token = request.query_params.get("token")
     cookie_token = request.cookies.get(AUTH_COOKIE_NAME)
-    return token_matches(config.token, query_token) or token_matches(config.token, cookie_token)
+    return token_matches(config.token, query_token) or token_matches(session_value(config.token), cookie_token)
+
+
+def safe_next(next_url: str | None) -> str:
+    """Only allow same-site relative redirects after login (blocks //evil.com and /\\evil.com)."""
+    if not next_url or not next_url.startswith("/") or next_url.startswith("//") or "\\" in next_url:
+        return "/"
+    return next_url

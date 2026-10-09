@@ -1,58 +1,50 @@
 {% extends "base.html" %}
 
-{% block title %}ServeBox - {{ item.name }}{% endblock %}
+{% block title %}{{ item.name }} – ServeBox{% endblock %}
 
 {% block content %}
-<main class="viewer">
-  <nav class="breadcrumbs" aria-label="Breadcrumb">
-    {% for crumb in breadcrumbs %}
-      {% if not loop.last %}
-        <a href="/browse?path={{ crumb.path|urlencode }}">{{ crumb.name }}</a>
-        <span>/</span>
+<div class="page">
+  <header class="toolbar">
+    <a class="tb-btn" href="/browse?path={{ item.parent_path|urlencode }}" aria-label="Back to folder"><svg><use href="#i-back"/></svg></a>
+    <h1 class="tb-title">{{ item.name }}</h1>
+    <div class="tb-group">
+      <button class="button compact" type="button" data-copy="{{ item.relative_path }}">Copy path</button>
+      <a class="button compact primary" href="/download?path={{ item.relative_path|urlencode }}">Download</a>
+    </div>
+  </header>
+
+  <main class="viewer">
+    <section class="preview-panel">
+      {% if item.preview_type == "text" %}
+        {% if preview_truncated %}
+          <div class="notice">Preview limited to the first {{ config.max_preview_mb }} MB.</div>
+        {% endif %}
+        <pre class="text-preview"><code>{{ text_preview }}</code></pre>
+      {% elif item.preview_type == "image" %}
+        <img class="media-preview" src="/raw?path={{ item.relative_path|urlencode }}" alt="{{ item.name }}">
+      {% elif item.preview_type == "pdf" %}
+        <iframe class="pdf-preview" src="/raw?path={{ item.relative_path|urlencode }}" title="{{ item.name }}"></iframe>
+      {% elif item.preview_type == "audio" %}
+        <audio controls src="/raw?path={{ item.relative_path|urlencode }}"></audio>
+      {% elif item.preview_type == "video" %}
+        <video class="media-preview" controls src="/raw?path={{ item.relative_path|urlencode }}"></video>
       {% else %}
-        <span>{{ crumb.name }}</span>
+        <div class="empty">No preview available. Use Download to save it.</div>
       {% endif %}
-    {% endfor %}
-  </nav>
+    </section>
 
-  <section class="viewer-header">
-    <div>
-      <h1>{{ item.name }}</h1>
-      <p class="path-line">{{ item.relative_path }}</p>
-    </div>
-    <div class="panel-actions">
-      <a class="button" href="/browse?path={{ item.parent_path|urlencode }}">Containing folder</a>
-      <a class="button primary" href="/download?path={{ item.relative_path|urlencode }}">Download</a>
-      <button class="button" type="button" data-copy="{{ item.relative_path }}">Copy path</button>
-    </div>
-  </section>
-
-  <section class="metadata-grid">
-    <div><span>Type</span><strong>{{ item.type }}</strong></div>
-    <div><span>Size</span><strong>{{ item.size_display }}</strong></div>
-    <div><span>Modified</span><strong>{{ item.modified_display }}</strong></div>
-    <div><span>MIME</span><strong>{{ item.mime_type or "unknown" }}</strong></div>
-  </section>
-
-  <section class="preview-panel">
-    {% if item.preview_type == "text" %}
-      {% if preview_truncated %}
-        <div class="notice">Preview limited to the first {{ config.max_preview_mb }} MB.</div>
-      {% endif %}
-      <pre class="text-preview"><code>{{ text_preview }}</code></pre>
-    {% elif item.preview_type == "image" %}
-      <img class="image-preview" src="/raw?path={{ item.relative_path|urlencode }}" alt="{{ item.name }}">
-    {% elif item.preview_type == "pdf" %}
-      <iframe class="pdf-preview" src="/raw?path={{ item.relative_path|urlencode }}" title="{{ item.name }}"></iframe>
-    {% elif item.preview_type == "audio" %}
-      <audio controls src="/raw?path={{ item.relative_path|urlencode }}"></audio>
-    {% elif item.preview_type == "video" %}
-      <video controls src="/raw?path={{ item.relative_path|urlencode }}"></video>
-    {% else %}
-      <div class="empty-state">
-        Preview is not available for this file type. Use Download to save it locally.
-      </div>
-    {% endif %}
-  </section>
-</main>
+    <aside class="info">
+      <h2>Info</h2>
+      <dl>
+        <dt>Kind</dt><dd>{{ item.mime_type or item.type }}</dd>
+        <dt>Size</dt><dd>{{ item.size_display }}</dd>
+        <dt>Modified</dt><dd>{{ item.modified_display }}</dd>
+        <dt>Where</dt><dd class="mono">/{{ item.parent_path }}</dd>
+        {% if item.tags %}
+        <dt>Tags</dt><dd>{% for t in item.tags %}<i class="dot tag-{{ t }}" title="{{ t }}"></i>{% endfor %}</dd>
+        {% endif %}
+      </dl>
+    </aside>
+  </main>
+</div>
 {% endblock %}

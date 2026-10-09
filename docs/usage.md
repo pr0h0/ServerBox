@@ -132,19 +132,34 @@ python -m servebox ~/Projects --exclude .git,node_modules,.cache,tmp
 
 ## Web UI
 
-The top bar shows the app name, selected root path, write mode, search, and logout when token auth is enabled.
+The browser works like macOS Finder:
 
-The sidebar lazily loads child folders. It does not recursively load the full directory tree on page load.
+- Sidebar with the root, a lazily loaded folder tree, and color tags. On phones it slides in from the toolbar button.
+- Toolbar with back/forward, icon/list view toggle, new folder, upload, and search.
+- List view with sortable Name, Date Modified, Size, and Kind columns; icon view with image thumbnails.
+- Path bar and item count at the bottom.
+- Click selects, double-click opens. Cmd/Ctrl-click and Shift-click select multiple items. On touch screens a tap opens and the `⋯` button shows actions.
+- Right-click an item (or use `⋯`) for Open, Quick Look, Download, Rename, Move to, Copy Path, Get Info, Tags, and Delete. Right-click empty space for New Folder, Upload, and view options.
+- Drag items onto a folder, a sidebar folder, or the path bar to move them. Drag files from your computer anywhere onto the window to upload (onto a folder to upload into it).
+- Dark mode follows the system setting.
 
-The main browser includes:
+Keyboard shortcuts:
 
-- Breadcrumb navigation.
-- Current directory filter.
-- Upload button and drag/drop zone when not readonly.
-- File table with name, type, size, modified time, and actions.
-- View, download, copy path, rename, and delete actions.
+```txt
+Arrow keys          Move selection (Shift extends it)
+Space               Quick Look (arrows browse while it is open)
+Enter, Cmd/Ctrl+O   Open
+Cmd/Ctrl+Up         Parent folder
+F2                  Rename
+Delete, Cmd+Backsp  Delete selection
+Cmd/Ctrl+A          Select all
+Cmd/Ctrl+F          Focus search
+Esc                 Close / clear selection
+```
 
-Delete uses a confirm modal. It does not require typing the full path.
+## Tags
+
+Items can carry Finder's seven color tags (red, orange, yellow, green, blue, purple, gray). Tag them from the context menu; click a tag in the sidebar to see everything with that tag. Tags are stored in `.servebox-tags.json` in the served root, so they move with the folder, and they follow renames, moves, and deletes made through ServeBox. Tagging is disabled in readonly mode.
 
 ## Search
 
@@ -154,7 +169,7 @@ The search box in the top bar performs case-insensitive recursive filename searc
 find . -iname "*query*"
 ```
 
-Search can run from the root or the current directory, depending on the scope selector. It skips excluded directory names and stops at `--max-search-results`.
+Results replace the file view as you type. Use the scope chips under the toolbar to search the whole root or only the current folder. It skips excluded directory names and stops at `--max-search-results`.
 
 ## Uploads
 
@@ -205,7 +220,7 @@ Or include the token in a direct URL:
 http://127.0.0.1:9999/browse?token=mysecret
 ```
 
-The login stores the token in an HTTP-only cookie.
+The login stores an HMAC derived from the token (not the token itself) in an HTTP-only cookie. Failed logins are delayed by one second, and the post-login redirect only accepts local paths.
 
 ## Readonly Mode
 
@@ -219,8 +234,9 @@ Disabled operations:
 
 - Upload.
 - Create folder.
-- Rename.
+- Rename and move.
 - Delete.
+- Tagging.
 
 Browsing, previewing, downloading, and searching still work.
 
@@ -237,7 +253,13 @@ The safe resolver:
 - Resolves symlinks.
 - Allows access only when the resolved target is the root or inside it.
 
-Symlinks that point outside the root are blocked.
+Symlinks that point outside the root are blocked. Rename, move, and delete act on a symlink itself, never on what it points to. Uploads never write through an existing symlink.
+
+Other protections:
+
+- Files served from `/raw` get a `Content-Security-Policy: sandbox` header, so an uploaded HTML or SVG file cannot run script against ServeBox (PDFs are exempt because browser PDF viewers refuse sandboxing).
+- Pages get a strict CSP, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and `Referrer-Policy: same-origin`.
+- State-changing requests from another origin are rejected (CSRF protection).
 
 ## Troubleshooting
 

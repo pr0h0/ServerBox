@@ -83,3 +83,33 @@ def test_auto_rename_creates_numbered_target(tmp_path: Path) -> None:
     target = auto_rename_target(tmp_path, "file.txt")
 
     assert target == tmp_path / "file (2).txt"
+
+
+def test_delete_of_symlink_removes_link_not_target(tmp_path: Path) -> None:
+    from servebox.fs import delete_path
+
+    (tmp_path / "real").mkdir()
+    (tmp_path / "real" / "keep.txt").write_text("keep")
+    (tmp_path / "link").symlink_to(tmp_path / "real")
+    config = make_config(tmp_path)
+
+    delete_path(config, safe_resolve(config, "link", follow_final=False))
+
+    assert not (tmp_path / "link").exists()
+    assert (tmp_path / "real" / "keep.txt").exists()
+
+
+def test_upload_name_skips_dangling_symlink(tmp_path: Path) -> None:
+    (tmp_path / "evil.txt").symlink_to(tmp_path.parent / "outside-target.txt")
+
+    assert auto_rename_target(tmp_path, "evil.txt") == tmp_path / "evil (1).txt"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("/browse?path=a", "/browse?path=a"), ("//evil.com", "/"), ("https://evil.com", "/"), ("/\\evil.com", "/"), ("", "/")],
+)
+def test_safe_next_blocks_open_redirects(value: str, expected: str) -> None:
+    from servebox.security import safe_next
+
+    assert safe_next(value) == expected

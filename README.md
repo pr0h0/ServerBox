@@ -64,19 +64,21 @@ python -m servebox ~/Downloads --show-hidden
 
 ## Features
 
-- Directory browser rooted at `/`.
-- Breadcrumb navigation that cannot move above the selected root.
+- Finder-style UI: icon and list views, sortable columns, sidebar, path bar, dark mode, and a phone-friendly layout.
+- Right-click context menus, multi-select, keyboard shortcuts, and Quick Look (Space).
+- Finder color tags, with a sidebar view per tag.
+- Drag items onto folders to move them; drag files in from your desktop to upload with progress.
 - Lazy-loaded sidebar directory tree.
-- Current directory filtering in the browser.
-- Recursive case-insensitive search with result limits.
+- Recursive case-insensitive search with result limits, shown in the main view.
 - Hidden file filtering unless `--show-hidden` is used.
 - Upload by file picker or drag and drop.
 - Upload auto-rename with `file (1).txt` style names.
 - Text, image, PDF, audio, and video previews.
 - Download and raw inline file serving.
-- Folder creation, rename, and confirm-modal delete when not readonly.
+- Folder creation, rename, move, and confirm-modal delete when not readonly.
 - Token login and `?token=...` access for shared links.
-- JSON APIs for list, tree, search, upload, mkdir, rename, and delete.
+- JSON APIs for list, tree, search, upload, mkdir, rename, move, tags, and delete.
+- Hardened defaults: sandboxed raw files, strict CSP, CSRF origin checks, hashed session cookie.
 
 ## CLI Options
 

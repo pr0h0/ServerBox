@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import mimetypes
+import os
 import shutil
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -66,6 +67,7 @@ class FileItem:
     is_symlink: bool
     target_outside: bool
     accessible: bool
+    tags: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -239,7 +241,8 @@ def child_directories(config: AppConfig, directory: Path) -> list[FileItem]:
 def auto_rename_target(directory: Path, filename: str) -> Path:
     filename = validate_upload_filename(filename)
     requested = directory / filename
-    if not requested.exists():
+    # lexists: a dangling symlink must count as taken, or writing to it would follow the link.
+    if not os.path.lexists(requested):
         return requested
 
     suffix = requested.suffix
@@ -247,7 +250,7 @@ def auto_rename_target(directory: Path, filename: str) -> Path:
     index = 1
     while True:
         candidate = directory / f"{stem} ({index}){suffix}"
-        if not candidate.exists():
+        if not os.path.lexists(candidate):
             return candidate
         index += 1
 
@@ -268,11 +271,36 @@ def create_directory(config: AppConfig, directory: Path, name: str) -> FileItem:
 def rename_path(config: AppConfig, path: Path, new_name: str) -> FileItem:
     if path == config.root:
         raise HTTPException(status_code=400, detail="Cannot rename the root directory")
-    target = safe_child_path(config, path.parent, new_name)
-    if target.exists():
+    safe_child_path(config, path.parent, new_name)
+    target = path.parent / new_name  # unresolved, so a renamed symlink stays the symlink
+    if os.path.lexists(target):
         raise HTTPException(status_code=409, detail="A file or folder already exists with that name")
     try:
         path.rename(target)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail="Permission denied") from exc
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return build_file_item(config, target)
+
+
+def move_path(config: AppConfig, path: Path, directory: Path) -> FileItem:
+    if path == config.root:
+        raise HTTPException(status_code=400, detail="Cannot move the root directory")
+    if not directory.is_dir():
+        raise HTTPException(status_code=400, detail="Destination is not a folder")
+    if not os.path.lexists(path):
+        raise HTTPException(status_code=404, detail="Item not found")
+    if directory == path or path in directory.parents:
+        raise HTTPException(status_code=400, detail="Cannot move a folder into itself")
+    if path.parent == directory:
+        return build_file_item(config, path)
+    safe_child_path(config, directory, path.name)
+    target = directory / path.name
+    if os.path.lexists(target):
+        raise HTTPException(status_code=409, detail=f"{path.name} already exists in the destination")
+    try:
+        shutil.move(path, target)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail="Permission denied") from exc
     except OSError as exc:
